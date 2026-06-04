@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Search, SlidersHorizontal, Plus, ChevronLeft, ChevronRight, Archive, Pencil, Eye, X } from "lucide-react";
+import { Search, SlidersHorizontal, Plus, ChevronLeft, ChevronRight, Archive, Pencil, X } from "lucide-react";
 import { fetchContracts, fetchEnums, archiveContract, importContractsCsv } from "../api/contracts";
 import type { ContractFilters } from "../types";
 import StatusBadge from "../components/StatusBadge";
@@ -203,7 +203,11 @@ export default function ContractListPage() {
                     </tr>
                   )}
                   {data?.items.map(c => (
-                    <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                    <tr
+                      key={c.id}
+                      className="hover:bg-brand-50 transition-colors cursor-pointer"
+                      onClick={() => navigate(`/contracts/${c.id}`)}
+                    >
                       <td className="px-4 py-3">
                         <div className="font-medium text-gray-900 truncate max-w-xs">
                           {c.product_or_service || "—"}
@@ -234,14 +238,8 @@ export default function ContractListPage() {
                           <div className="text-xs text-red-500 mt-0.5">DNR</div>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-1 justify-end">
-                          <button
-                            onClick={() => navigate(`/contracts/${c.id}`)}
-                            className="p-1.5 rounded hover:bg-gray-100 text-gray-500" title="View"
-                          >
-                            <Eye size={15} />
-                          </button>
                           <button
                             onClick={() => navigate(`/contracts/${c.id}/edit`)}
                             className="p-1.5 rounded hover:bg-gray-100 text-gray-500" title="Edit"

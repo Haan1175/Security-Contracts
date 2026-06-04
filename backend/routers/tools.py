@@ -125,24 +125,47 @@ def unarchive_tool(tool_id: int, db: Session = Depends(get_db)):
     return tool
 
 
-_TOOL_BOOL_FIELDS = {"archived"}
-_TOOL_INT_FIELDS = {"cost_center", "seat_count", "effectiveness_score", "coverage_score"}
-_TOOL_DATE_FIELDS = {"last_assessed_date", "next_review_date"}
+_TOOL_BOOL_FIELDS = {"archived", "auto_renewal", "supported_by_sae", "annual_vendor_review_reqd"}
+_TOOL_INT_FIELDS = {"cost_center", "seat_count", "effectiveness_score", "coverage_score", "score", "auto_renewal_notification_term"}
+_TOOL_FLOAT_FIELDS = {"contract_cost_usd", "annual_cost"}
+_TOOL_DATE_FIELDS = {"last_assessed_date", "next_review_date", "start_date", "end_date", "email_sent"}
+
+
+_TOOL_COLUMN_MAP = {
+    "product": "name",
+    "capability": "security_capability",
+    "disposition": "deployment_status",
+    "function_alignment_nist_csf_2.0": "nist_csf_alignment",
+    "internal_contact": "owner_name",
+    "internal_contact_email": "owner_email",
+    "last_annual_review": "last_assessed_date",
+    "auto-renewal_(y/n)": "auto_renewal",
+    "auto-renewal_notification_term_(days)": "auto_renewal_notification_term",
+    "contract_cost_(usd)": "contract_cost_usd",
+    "score_(0-5)": "score",
+    "coverage_(0-5)": "coverage_score",
+    "effectiveness_(0-5)": "effectiveness_score",
+    "annual_vendor_review_reqd?": "annual_vendor_review_reqd",
+    "supported_by_sa&e": "supported_by_sae",
+}
 
 
 def _parse_tool_row(row: dict) -> dict:
     data = {}
     for k, v in row.items():
-        k = k.strip().lower().replace(" ", "_")
+        k = k.strip().lower().replace(" ", "_").replace("/", "_").strip("_")
+        k = _TOOL_COLUMN_MAP.get(k, k)
         v = v.strip() if isinstance(v, str) else v
-        if v == "":
+        if v == "" or v is None:
             continue
         if k in _TOOL_BOOL_FIELDS:
-            data[k] = v.lower() in ("true", "yes", "1")
+            data[k] = str(v).lower() in ("true", "yes", "1", "y")
         elif k in _TOOL_INT_FIELDS:
-            data[k] = int(v)
+            data[k] = int(float(str(v)))
+        elif k in _TOOL_FLOAT_FIELDS:
+            data[k] = float(str(v).replace(",", ""))
         elif k in _TOOL_DATE_FIELDS:
-            data[k] = date.fromisoformat(v)
+            data[k] = date.fromisoformat(str(v))
         else:
             data[k] = v
     return data
@@ -150,7 +173,7 @@ def _parse_tool_row(row: dict) -> dict:
 
 @router.post("/import-csv")
 async def import_tools_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    if not file.filename.endswith(".csv"):
+    if not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a .csv")
 
     content = await file.read()

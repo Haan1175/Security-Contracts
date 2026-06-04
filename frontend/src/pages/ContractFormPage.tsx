@@ -7,7 +7,9 @@ import type { Contract } from "../types";
 
 type FormData = Partial<Contract>;
 
-const BOOL_FIELDS = ["nda", "auto_renewal", "amortize"] as const;
+const MONTHS = ["nov", "dec", "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct"] as const;
+const FYS = ["25", "26", "27", "28"] as const;
+type FYKey = `fy${typeof FYS[number]}_${typeof MONTHS[number]}`;
 
 export default function ContractFormPage() {
   const { id } = useParams();
@@ -23,17 +25,11 @@ export default function ContractFormPage() {
   });
 
   const [form, setForm] = useState<FormData>({
-    nda: false,
-    auto_renewal: false,
-    amortize: false,
-    currency: "USD",
-    recurring: "NO",
+    nda: false, auto_renewal: false, amortize: false, currency: "USD", recurring: "NO",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    if (existing) setForm(existing);
-  }, [existing]);
+  useEffect(() => { if (existing) setForm(existing); }, [existing]);
 
   const saveMut = useMutation({
     mutationFn: (data: FormData) =>
@@ -63,11 +59,7 @@ export default function ContractFormPage() {
     if (validate()) saveMut.mutate(form);
   };
 
-  const Field = ({
-    label, name, required, children,
-  }: {
-    label: string; name: string; required?: boolean; children: React.ReactNode;
-  }) => (
+  const Field = ({ label, name, required, children }: { label: string; name: string; required?: boolean; children: React.ReactNode }) => (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">
         {label} {required && <span className="text-red-500">*</span>}
@@ -78,6 +70,7 @@ export default function ContractFormPage() {
   );
 
   const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
+  const inpSm = "w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400";
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
@@ -85,35 +78,33 @@ export default function ContractFormPage() {
         <button onClick={() => navigate(-1)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500">
           <ArrowLeft size={18} />
         </button>
-        <h1 className="text-2xl font-bold text-gray-900">
-          {isEdit ? "Edit Contract" : "New Contract"}
-        </h1>
+        <h1 className="text-2xl font-bold text-gray-900">{isEdit ? "Edit Contract" : "New Contract"}</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+
         {/* Identity */}
         <section className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Identity</h2>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Product or Service" name="product_or_service" required>
-              <input className={`${inp} ${errors.product_or_service ? "border-red-400" : ""}`}
-                value={form.product_or_service || ""}
-                onChange={e => set("product_or_service", e.target.value)} />
+              <input className={`${inp} ${errors.product_or_service ? "border-red-400" : ""}`} value={form.product_or_service || ""} onChange={e => set("product_or_service", e.target.value)} />
             </Field>
-            <Field label="PO Number" name="po_number">
+            <Field label="Purchase Order Number" name="po_number">
               <input className={inp} value={form.po_number || ""} onChange={e => set("po_number", e.target.value)} />
             </Field>
-            <Field label="Scope" name="scope">
-              <textarea className={`${inp} h-20 resize-none`} value={form.scope || ""}
-                onChange={e => set("scope", e.target.value)} />
-            </Field>
-            <Field label="Anaplan ID" name="anaplan_id">
+            <div className="col-span-2">
+              <Field label="Scope" name="scope">
+                <textarea className={`${inp} h-16 resize-none`} value={form.scope || ""} onChange={e => set("scope", e.target.value)} />
+              </Field>
+            </div>
+            <Field label="Anaplan unique ID" name="anaplan_id">
               <input className={inp} value={form.anaplan_id || ""} onChange={e => set("anaplan_id", e.target.value)} />
             </Field>
           </div>
         </section>
 
-        {/* Vendor / Owner */}
+        {/* Vendor & Owner */}
         <section className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Vendor & Owner</h2>
           <div className="grid grid-cols-2 gap-4">
@@ -121,13 +112,12 @@ export default function ContractFormPage() {
               <input className={inp} value={form.vendor || ""} onChange={e => set("vendor", e.target.value)} />
             </Field>
             <Field label="Cost Center" name="cost_center">
-              <input type="number" className={inp} value={form.cost_center ?? ""}
-                onChange={e => set("cost_center", e.target.value ? Number(e.target.value) : null)} />
+              <input type="number" className={inp} value={form.cost_center ?? ""} onChange={e => set("cost_center", e.target.value ? Number(e.target.value) : null)} />
             </Field>
-            <Field label="Owner Name" name="owner_name">
+            <Field label="Security Contract Owner" name="owner_name">
               <input className={inp} value={form.owner_name || ""} onChange={e => set("owner_name", e.target.value)} />
             </Field>
-            <Field label="Owner Email" name="owner_email">
+            <Field label="Security Contract Owner email" name="owner_email">
               <input type="email" className={inp} value={form.owner_email || ""} onChange={e => set("owner_email", e.target.value)} />
             </Field>
           </div>
@@ -160,17 +150,18 @@ export default function ContractFormPage() {
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Financials</h2>
           <div className="grid grid-cols-3 gap-4">
             <Field label="Contract Amount" name="contract_amount">
-              <input type="number" step="0.01" className={inp} value={form.contract_amount ?? ""}
-                onChange={e => set("contract_amount", e.target.value ? Number(e.target.value) : null)} />
+              <input type="number" step="0.01" className={inp} value={form.contract_amount ?? ""} onChange={e => set("contract_amount", e.target.value ? Number(e.target.value) : null)} />
             </Field>
             <Field label="Currency" name="currency">
               <select className={inp} value={form.currency || "USD"} onChange={e => set("currency", e.target.value)}>
                 {enums?.currencies.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </Field>
-            <Field label="Amount (USD)" name="contract_amount_usd">
-              <input type="number" step="0.01" className={inp} value={form.contract_amount_usd ?? ""}
-                onChange={e => set("contract_amount_usd", e.target.value ? Number(e.target.value) : null)} />
+            <Field label="Contract Amount (USD)" name="contract_amount_usd">
+              <input type="number" step="0.01" className={inp} value={form.contract_amount_usd ?? ""} onChange={e => set("contract_amount_usd", e.target.value ? Number(e.target.value) : null)} />
+            </Field>
+            <Field label="Monthly Amount (USD)" name="monthly_amount_usd">
+              <input type="number" step="0.01" className={inp} value={form.monthly_amount_usd ?? ""} onChange={e => set("monthly_amount_usd", e.target.value ? Number(e.target.value) : null)} />
             </Field>
             <Field label="Payment Term" name="payment_term">
               <input className={inp} value={form.payment_term || ""} onChange={e => set("payment_term", e.target.value)} />
@@ -184,6 +175,10 @@ export default function ContractFormPage() {
                 {enums?.recurring_options.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </Field>
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer self-end pb-2">
+              <input type="checkbox" className="rounded border-gray-300 text-brand-600 focus:ring-brand-500" checked={Boolean(form.amortize)} onChange={e => set("amortize", e.target.checked)} />
+              Amortize
+            </label>
           </div>
         </section>
 
@@ -192,19 +187,21 @@ export default function ContractFormPage() {
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Lifecycle</h2>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Start Date" name="start_date">
-              <input type="date" className={inp} value={form.start_date || ""}
-                onChange={e => set("start_date", e.target.value || null)} />
+              <input type="date" className={inp} value={form.start_date || ""} onChange={e => set("start_date", e.target.value || null)} />
             </Field>
             <Field label="End Date" name="end_date">
-              <input type="date" className={`${inp} ${errors.end_date ? "border-red-400" : ""}`}
-                value={form.end_date || ""}
-                onChange={e => set("end_date", e.target.value || null)} />
+              <input type="date" className={`${inp} ${errors.end_date ? "border-red-400" : ""}`} value={form.end_date || ""} onChange={e => set("end_date", e.target.value || null)} />
+            </Field>
+            <Field label="Days" name="contract_days">
+              <input type="number" className={inp} value={form.contract_days ?? ""} onChange={e => set("contract_days", e.target.value ? Number(e.target.value) : null)} />
+            </Field>
+            <Field label="Months" name="contract_months">
+              <input type="number" className={inp} value={form.contract_months ?? ""} onChange={e => set("contract_months", e.target.value ? Number(e.target.value) : null)} />
             </Field>
             <Field label="Notification Term (days)" name="notification_term_days">
-              <input type="number" className={inp} value={form.notification_term_days ?? ""}
-                onChange={e => set("notification_term_days", e.target.value ? Number(e.target.value) : null)} />
+              <input type="number" className={inp} value={form.notification_term_days ?? ""} onChange={e => set("notification_term_days", e.target.value ? Number(e.target.value) : null)} />
             </Field>
-            <Field label="Renewed" name="renewed">
+            <Field label="Renewed (Y/N)" name="renewed">
               <select className={inp} value={form.renewed || ""} onChange={e => set("renewed", e.target.value || null)}>
                 <option value="">—</option>
                 <option value="Y">Y</option>
@@ -212,40 +209,67 @@ export default function ContractFormPage() {
               </select>
             </Field>
             <Field label="Do Not Renew" name="do_not_renew">
-              <input className={inp} value={form.do_not_renew || ""} onChange={e => set("do_not_renew", e.target.value || null)}
-                placeholder="Leave blank or enter note" />
+              <input className={inp} value={form.do_not_renew || ""} onChange={e => set("do_not_renew", e.target.value || null)} placeholder="Leave blank or enter note" />
             </Field>
           </div>
-
           <div className="flex gap-6 mt-4">
-            {BOOL_FIELDS.map(field => (
-              <label key={field} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-                  checked={Boolean(form[field])}
-                  onChange={e => set(field, e.target.checked)}
-                />
-                {field.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
-              </label>
-            ))}
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input type="checkbox" className="rounded border-gray-300 text-brand-600 focus:ring-brand-500" checked={Boolean(form.nda)} onChange={e => set("nda", e.target.checked)} />
+              NDA
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input type="checkbox" className="rounded border-gray-300 text-brand-600 focus:ring-brand-500" checked={Boolean(form.auto_renewal)} onChange={e => set("auto_renewal", e.target.checked)} />
+              Auto Renewal
+            </label>
+          </div>
+        </section>
+
+        {/* Monthly Amortization */}
+        <section className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Monthly Amortization</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="text-left px-2 py-2 font-semibold text-gray-500 w-16">FY</th>
+                  {MONTHS.map(m => (
+                    <th key={m} className="text-center px-1 py-2 font-semibold text-gray-500 capitalize w-20">{m.charAt(0).toUpperCase() + m.slice(1)}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {FYS.map(yr => (
+                  <tr key={yr}>
+                    <td className="px-2 py-1.5 font-medium text-gray-600">FY{yr}</td>
+                    {MONTHS.map(mo => {
+                      const key = `fy${yr}_${mo}` as FYKey;
+                      return (
+                        <td key={mo} className="px-1 py-1">
+                          <input
+                            type="number" step="0.01" min={0}
+                            className={inpSm}
+                            value={(form as Record<string, unknown>)[key] as number ?? ""}
+                            onChange={e => set(key as keyof FormData, e.target.value ? Number(e.target.value) : null)}
+                            placeholder="—"
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </section>
 
         <div className="flex gap-3 justify-end">
-          <button type="button" onClick={() => navigate(-1)}
-            className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">
-            Cancel
-          </button>
+          <button type="button" onClick={() => navigate(-1)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
           <button type="submit" disabled={saveMut.isPending}
             className="flex items-center gap-1.5 px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium disabled:opacity-60">
             <Save size={15} /> {saveMut.isPending ? "Saving…" : "Save Contract"}
           </button>
         </div>
-
-        {saveMut.isError && (
-          <p className="text-sm text-red-500 text-right">Failed to save. Please try again.</p>
-        )}
+        {saveMut.isError && <p className="text-sm text-red-500 text-right">Failed to save. Please try again.</p>}
       </form>
     </div>
   );

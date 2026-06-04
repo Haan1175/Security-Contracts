@@ -6,7 +6,7 @@ import { fetchTool, createTool, updateTool } from "../api/tools";
 import { fetchEnums } from "../api/contracts";
 import type { SecurityTool } from "../types";
 
-const DEPLOYMENT_STATUSES = ["Active", "Evaluation", "Deprecated", "Retired"];
+const DISPOSITION_OPTIONS = ["Active", "Evaluation", "Deprecated", "Retired"];
 const LICENSE_TYPES = ["Perpetual", "Subscription", "SaaS", "Open Source", "Enterprise License", "Per-Seat"];
 
 export default function ToolFormPage() {
@@ -44,10 +44,10 @@ export default function ToolFormPage() {
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
     if (!form.name?.trim()) errs.name = "Required";
-    if (form.effectiveness_score != null && (form.effectiveness_score < 0 || form.effectiveness_score > 100))
-      errs.effectiveness_score = "Must be 0–100";
-    if (form.coverage_score != null && (form.coverage_score < 0 || form.coverage_score > 100))
-      errs.coverage_score = "Must be 0–100";
+    for (const f of ["score", "effectiveness_score", "coverage_score"] as const) {
+      const v = form[f];
+      if (v != null && (v < 1 || v > 5)) errs[f] = "Must be 1–5";
+    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -69,6 +69,29 @@ export default function ToolFormPage() {
     </div>
   );
 
+  const ScoreInput = ({ fieldKey, label }: { fieldKey: "score" | "effectiveness_score" | "coverage_score"; label: string }) => {
+    const val = form[fieldKey];
+    const pct = val != null ? (val / 5) * 100 : null;
+    const barColor = pct == null ? "" : pct >= 80 ? "bg-green-500" : pct >= 60 ? "bg-yellow-400" : pct >= 40 ? "bg-orange-400" : "bg-red-500";
+    return (
+      <Field label={label} name={fieldKey}>
+        <div className="space-y-2">
+          <input
+            type="number" min={1} max={5} step={1}
+            className={`${inp} ${errors[fieldKey] ? "border-red-400" : ""}`}
+            value={val ?? ""}
+            onChange={e => set(fieldKey, e.target.value !== "" ? Number(e.target.value) : null)}
+          />
+          {val != null && (
+            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className={`h-2 rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+            </div>
+          )}
+        </div>
+      </Field>
+    );
+  };
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
       <div className="flex items-center gap-3 mb-6">
@@ -79,49 +102,34 @@ export default function ToolFormPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+
         {/* Identity */}
         <section className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Identity</h2>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Tool Name" name="name" required>
+            <Field label="Product" name="name" required>
               <input className={`${inp} ${errors.name ? "border-red-400" : ""}`} value={form.name || ""} onChange={e => set("name", e.target.value)} />
+            </Field>
+            <Field label="Vendor" name="vendor">
+              <input className={inp} value={form.vendor || ""} onChange={e => set("vendor", e.target.value)} />
+            </Field>
+            <Field label="UCF Domain" name="ucf_domain">
+              <input className={inp} value={form.ucf_domain || ""} onChange={e => set("ucf_domain", e.target.value)} />
+            </Field>
+            <Field label="Process/Solution" name="process_solution">
+              <input className={inp} value={form.process_solution || ""} onChange={e => set("process_solution", e.target.value)} />
+            </Field>
+            <Field label="Component" name="component">
+              <input className={inp} value={form.component || ""} onChange={e => set("component", e.target.value)} />
             </Field>
             <Field label="Version" name="version">
               <input className={inp} value={form.version || ""} onChange={e => set("version", e.target.value)} placeholder="e.g. 4.2.1" />
             </Field>
             <div className="col-span-2">
-              <Field label="Description" name="description">
-                <textarea className={`${inp} h-20 resize-none`} value={form.description || ""} onChange={e => set("description", e.target.value)} />
+              <Field label="Primary Use" name="primary_use">
+                <textarea className={`${inp} h-16 resize-none`} value={form.primary_use || ""} onChange={e => set("primary_use", e.target.value)} />
               </Field>
             </div>
-            <Field label="License Type" name="license_type">
-              <select className={inp} value={form.license_type || ""} onChange={e => set("license_type", e.target.value || null)}>
-                <option value="">— Select —</option>
-                {LICENSE_TYPES.map(l => <option key={l} value={l}>{l}</option>)}
-              </select>
-            </Field>
-            <Field label="Seat Count" name="seat_count">
-              <input type="number" className={inp} value={form.seat_count ?? ""} onChange={e => set("seat_count", e.target.value ? Number(e.target.value) : null)} />
-            </Field>
-          </div>
-        </section>
-
-        {/* Vendor & Owner */}
-        <section className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Vendor & Owner</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Vendor" name="vendor">
-              <input className={inp} value={form.vendor || ""} onChange={e => set("vendor", e.target.value)} />
-            </Field>
-            <Field label="Cost Center" name="cost_center">
-              <input type="number" className={inp} value={form.cost_center ?? ""} onChange={e => set("cost_center", e.target.value ? Number(e.target.value) : null)} />
-            </Field>
-            <Field label="Owner Name" name="owner_name">
-              <input className={inp} value={form.owner_name || ""} onChange={e => set("owner_name", e.target.value)} />
-            </Field>
-            <Field label="Owner Email" name="owner_email">
-              <input type="email" className={inp} value={form.owner_email || ""} onChange={e => set("owner_email", e.target.value)} />
-            </Field>
           </div>
         </section>
 
@@ -135,16 +143,91 @@ export default function ToolFormPage() {
                 {enums?.security_functions.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </Field>
-            <Field label="Security Capability" name="security_capability">
+            <Field label="Function Alignment NIST CSF 2.0" name="nist_csf_alignment">
+              <input className={inp} value={form.nist_csf_alignment || ""} onChange={e => set("nist_csf_alignment", e.target.value)} />
+            </Field>
+            <Field label="Capability" name="security_capability">
               <select className={inp} value={form.security_capability || ""} onChange={e => set("security_capability", e.target.value || null)}>
                 <option value="">— Select —</option>
                 {enums?.security_capabilities.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </Field>
-            <Field label="Deployment Status" name="deployment_status">
+            <Field label="Functional Area" name="functional_area">
+              <input className={inp} value={form.functional_area || ""} onChange={e => set("functional_area", e.target.value)} />
+            </Field>
+            <Field label="Disposition" name="deployment_status">
               <select className={inp} value={form.deployment_status || "Active"} onChange={e => set("deployment_status", e.target.value)}>
-                {DEPLOYMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                {DISPOSITION_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
+            </Field>
+            <Field label="License Type" name="license_type">
+              <select className={inp} value={form.license_type || ""} onChange={e => set("license_type", e.target.value || null)}>
+                <option value="">— Select —</option>
+                {LICENSE_TYPES.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </Field>
+          </div>
+        </section>
+
+        {/* Contract & Vendor */}
+        <section className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Contract & Vendor</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Support Contact" name="support_contact">
+              <input className={inp} value={form.support_contact || ""} onChange={e => set("support_contact", e.target.value)} />
+            </Field>
+            <Field label="Support Contact Email" name="support_contact_email">
+              <input type="email" className={inp} value={form.support_contact_email || ""} onChange={e => set("support_contact_email", e.target.value)} />
+            </Field>
+            <Field label="Start Date" name="start_date">
+              <input type="date" className={inp} value={form.start_date || ""} onChange={e => set("start_date", e.target.value || null)} />
+            </Field>
+            <Field label="End Date" name="end_date">
+              <input type="date" className={inp} value={form.end_date || ""} onChange={e => set("end_date", e.target.value || null)} />
+            </Field>
+            <Field label="Renewal Period" name="renewal_period">
+              <input className={inp} value={form.renewal_period || ""} onChange={e => set("renewal_period", e.target.value)} placeholder="e.g. Annual" />
+            </Field>
+            <Field label="Contract Cost (USD)" name="contract_cost_usd">
+              <input type="number" min={0} step={0.01} className={inp} value={form.contract_cost_usd ?? ""} onChange={e => set("contract_cost_usd", e.target.value ? Number(e.target.value) : null)} />
+            </Field>
+            <Field label="Annual Cost" name="annual_cost">
+              <input type="number" min={0} step={0.01} className={inp} value={form.annual_cost ?? ""} onChange={e => set("annual_cost", e.target.value ? Number(e.target.value) : null)} />
+            </Field>
+            <div className="flex flex-col gap-3">
+              <Field label="Auto-renewal (Y/N)" name="auto_renewal">
+                <select className={inp} value={form.auto_renewal ? "yes" : "no"} onChange={e => set("auto_renewal", e.target.value === "yes")}>
+                  <option value="no">No</option>
+                  <option value="yes">Yes</option>
+                </select>
+              </Field>
+              {form.auto_renewal && (
+                <Field label="Auto-renewal Notification Term (Days)" name="auto_renewal_notification_term">
+                  <input type="number" min={0} className={inp} value={form.auto_renewal_notification_term ?? ""} onChange={e => set("auto_renewal_notification_term", e.target.value ? Number(e.target.value) : null)} />
+                </Field>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Ownership */}
+        <section className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Ownership</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Budget Owner" name="budget_owner">
+              <input className={inp} value={form.budget_owner || ""} onChange={e => set("budget_owner", e.target.value)} />
+            </Field>
+            <Field label="Cost Center" name="cost_center">
+              <input type="number" className={inp} value={form.cost_center ?? ""} onChange={e => set("cost_center", e.target.value ? Number(e.target.value) : null)} />
+            </Field>
+            <Field label="Internal Contact" name="owner_name">
+              <input className={inp} value={form.owner_name || ""} onChange={e => set("owner_name", e.target.value)} />
+            </Field>
+            <Field label="Internal Contact Email" name="owner_email">
+              <input type="email" className={inp} value={form.owner_email || ""} onChange={e => set("owner_email", e.target.value)} />
+            </Field>
+            <Field label="Seat Count" name="seat_count">
+              <input type="number" className={inp} value={form.seat_count ?? ""} onChange={e => set("seat_count", e.target.value ? Number(e.target.value) : null)} />
             </Field>
           </div>
         </section>
@@ -152,44 +235,11 @@ export default function ToolFormPage() {
         {/* Scores */}
         <section className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">Scores</h2>
-          <p className="text-xs text-gray-400 mb-4">Enter a value from 0 to 100</p>
-          <div className="grid grid-cols-2 gap-6">
-            <Field label="Effectiveness Score" name="effectiveness_score">
-              <div className="space-y-2">
-                <input
-                  type="number" min={0} max={100}
-                  className={`${inp} ${errors.effectiveness_score ? "border-red-400" : ""}`}
-                  value={form.effectiveness_score ?? ""}
-                  onChange={e => set("effectiveness_score", e.target.value !== "" ? Number(e.target.value) : null)}
-                />
-                {form.effectiveness_score != null && (
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-2 rounded-full transition-all ${form.effectiveness_score >= 75 ? "bg-green-500" : form.effectiveness_score >= 50 ? "bg-yellow-400" : form.effectiveness_score >= 25 ? "bg-orange-400" : "bg-red-500"}`}
-                      style={{ width: `${form.effectiveness_score}%` }}
-                    />
-                  </div>
-                )}
-              </div>
-            </Field>
-            <Field label="Coverage Score" name="coverage_score">
-              <div className="space-y-2">
-                <input
-                  type="number" min={0} max={100}
-                  className={`${inp} ${errors.coverage_score ? "border-red-400" : ""}`}
-                  value={form.coverage_score ?? ""}
-                  onChange={e => set("coverage_score", e.target.value !== "" ? Number(e.target.value) : null)}
-                />
-                {form.coverage_score != null && (
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-2 rounded-full transition-all ${form.coverage_score >= 75 ? "bg-green-500" : form.coverage_score >= 50 ? "bg-yellow-400" : form.coverage_score >= 25 ? "bg-orange-400" : "bg-red-500"}`}
-                      style={{ width: `${form.coverage_score}%` }}
-                    />
-                  </div>
-                )}
-              </div>
-            </Field>
+          <p className="text-xs text-gray-400 mb-4">Enter a value from 1 to 5</p>
+          <div className="grid grid-cols-3 gap-6">
+            <ScoreInput fieldKey="score" label="Score (1-5)" />
+            <ScoreInput fieldKey="coverage_score" label="Coverage (1-5)" />
+            <ScoreInput fieldKey="effectiveness_score" label="Effectiveness (1-5)" />
           </div>
         </section>
 
@@ -197,17 +247,45 @@ export default function ToolFormPage() {
         <section className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Assessment</h2>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Last Assessed Date" name="last_assessed_date">
+            <Field label="Last Annual Review" name="last_assessed_date">
               <input type="date" className={inp} value={form.last_assessed_date || ""} onChange={e => set("last_assessed_date", e.target.value || null)} />
             </Field>
             <Field label="Next Review Date" name="next_review_date">
               <input type="date" className={inp} value={form.next_review_date || ""} onChange={e => set("next_review_date", e.target.value || null)} />
             </Field>
-            <div className="col-span-2">
-              <Field label="Notes" name="notes">
-                <textarea className={`${inp} h-20 resize-none`} value={form.notes || ""} onChange={e => set("notes", e.target.value || null)} />
+            <Field label="Email Sent" name="email_sent">
+              <input type="date" className={inp} value={form.email_sent || ""} onChange={e => set("email_sent", e.target.value || null)} />
+            </Field>
+            <div className="flex flex-col gap-3">
+              <Field label="Supported by SA&E" name="supported_by_sae">
+                <select className={inp} value={form.supported_by_sae ? "yes" : "no"} onChange={e => set("supported_by_sae", e.target.value === "yes")}>
+                  <option value="no">No</option>
+                  <option value="yes">Yes</option>
+                </select>
+              </Field>
+              <Field label="Annual Vendor Review Reqd?" name="annual_vendor_review_reqd">
+                <select className={inp} value={form.annual_vendor_review_reqd ? "yes" : "no"} onChange={e => set("annual_vendor_review_reqd", e.target.value === "yes")}>
+                  <option value="no">No</option>
+                  <option value="yes">Yes</option>
+                </select>
               </Field>
             </div>
+          </div>
+        </section>
+
+        {/* Notes & Roadmap */}
+        <section className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Notes & Roadmap</h2>
+          <div className="space-y-4">
+            <Field label="Notes" name="notes">
+              <textarea className={`${inp} h-16 resize-none`} value={form.notes || ""} onChange={e => set("notes", e.target.value || null)} />
+            </Field>
+            <Field label="Notes2" name="notes2">
+              <textarea className={`${inp} h-16 resize-none`} value={form.notes2 || ""} onChange={e => set("notes2", e.target.value || null)} />
+            </Field>
+            <Field label="Roadmap Notes" name="roadmap_notes">
+              <textarea className={`${inp} h-16 resize-none`} value={form.roadmap_notes || ""} onChange={e => set("roadmap_notes", e.target.value || null)} />
+            </Field>
           </div>
         </section>
 

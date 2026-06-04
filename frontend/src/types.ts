@@ -24,11 +24,31 @@ export interface Contract {
   contract_amount: number | null;
   currency: string | null;
   contract_amount_usd: number | null;
+  contract_days: number | null;
+  contract_months: number | null;
+  monthly_amount_usd: number | null;
   recurring: string | null;
   status: string | null;
   archived: boolean;
   created_at: string | null;
   updated_at: string | null;
+  // FY monthly amortization (FY25–FY28, Nov–Oct)
+  fy25_nov: number | null; fy25_dec: number | null; fy25_jan: number | null;
+  fy25_feb: number | null; fy25_mar: number | null; fy25_apr: number | null;
+  fy25_may: number | null; fy25_jun: number | null; fy25_jul: number | null;
+  fy25_aug: number | null; fy25_sep: number | null; fy25_oct: number | null;
+  fy26_nov: number | null; fy26_dec: number | null; fy26_jan: number | null;
+  fy26_feb: number | null; fy26_mar: number | null; fy26_apr: number | null;
+  fy26_may: number | null; fy26_jun: number | null; fy26_jul: number | null;
+  fy26_aug: number | null; fy26_sep: number | null; fy26_oct: number | null;
+  fy27_nov: number | null; fy27_dec: number | null; fy27_jan: number | null;
+  fy27_feb: number | null; fy27_mar: number | null; fy27_apr: number | null;
+  fy27_may: number | null; fy27_jun: number | null; fy27_jul: number | null;
+  fy27_aug: number | null; fy27_sep: number | null; fy27_oct: number | null;
+  fy28_nov: number | null; fy28_dec: number | null; fy28_jan: number | null;
+  fy28_feb: number | null; fy28_mar: number | null; fy28_apr: number | null;
+  fy28_may: number | null; fy28_jun: number | null; fy28_jul: number | null;
+  fy28_aug: number | null; fy28_sep: number | null; fy28_oct: number | null;
 }
 
 export interface ContractListResponse {
@@ -88,23 +108,53 @@ export interface EnumsResponse {
 
 export interface SecurityTool {
   id: number;
+  // Identity
   name: string | null;
   vendor: string | null;
   version: string | null;
+  ucf_domain: string | null;
+  process_solution: string | null;
+  component: string | null;
+  primary_use: string | null;
   description: string | null;
+  // Classification
   security_function: string | null;
+  nist_csf_alignment: string | null;
+  functional_area: string | null;
   security_capability: string | null;
-  owner_name: string | null;
-  owner_email: string | null;
-  cost_center: number | null;
   deployment_status: string | null;
   license_type: string | null;
   seat_count: number | null;
+  // Contract / vendor
+  support_contact: string | null;
+  support_contact_email: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  renewal_period: string | null;
+  contract_cost_usd: number | null;
+  annual_cost: number | null;
+  auto_renewal: boolean;
+  auto_renewal_notification_term: number | null;
+  // Ownership
+  budget_owner: string | null;
+  owner_name: string | null;
+  owner_email: string | null;
+  cost_center: number | null;
+  // Scores (0–5)
+  score: number | null;
   effectiveness_score: number | null;
   coverage_score: number | null;
+  // Assessment
+  supported_by_sae: boolean;
+  annual_vendor_review_reqd: boolean;
   last_assessed_date: string | null;
   next_review_date: string | null;
+  email_sent: string | null;
+  // Notes
   notes: string | null;
+  notes2: string | null;
+  roadmap_notes: string | null;
+  // Meta
   archived: boolean;
   created_at: string | null;
   updated_at: string | null;

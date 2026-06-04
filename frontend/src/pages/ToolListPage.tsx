@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Search, SlidersHorizontal, Plus, ChevronLeft, ChevronRight, Archive, Pencil, Eye, X } from "lucide-react";
+import { Search, SlidersHorizontal, Plus, ChevronLeft, ChevronRight, Archive, Pencil, X } from "lucide-react";
 import { fetchTools, archiveTool, importToolsCsv } from "../api/tools";
 import { fetchEnums } from "../api/contracts";
 import type { ToolFilters } from "../types";
@@ -31,7 +31,7 @@ function FilterPanel({
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
       </div>
       <div>
-        <label className="block text-xs text-gray-500 mb-1">Deployment Status</label>
+        <label className="block text-xs text-gray-500 mb-1">Disposition</label>
         <select className="input-sm" value={filters.deployment_status || ""} onChange={e => onChange({ deployment_status: e.target.value || undefined })}>
           <option value="">All</option>
           {DEPLOYMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -45,7 +45,7 @@ function FilterPanel({
         </select>
       </div>
       <div>
-        <label className="block text-xs text-gray-500 mb-1">Security Capability</label>
+        <label className="block text-xs text-gray-500 mb-1">Capability</label>
         <select className="input-sm" value={filters.security_capability || ""} onChange={e => onChange({ security_capability: e.target.value || undefined })}>
           <option value="">All</option>
           {enums.security_capabilities.map(s => <option key={s} value={s}>{s}</option>)}
@@ -138,12 +138,12 @@ export default function ToolListPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Tool / Vendor</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Product / Vendor</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Security Function</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Owner</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-36">Effectiveness</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-36">Coverage</th>
-                    <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Internal Contact</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-32">Effectiveness (1-5)</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-32">Coverage (1-5)</th>
+                    <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Disposition</th>
                     <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
@@ -155,7 +155,7 @@ export default function ToolListPage() {
                     <tr><td colSpan={7} className="text-center py-12 text-gray-400">No tools found</td></tr>
                   )}
                   {data?.items.map(t => (
-                    <tr key={t.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={t.id} className="hover:bg-brand-50 transition-colors cursor-pointer" onClick={() => navigate(`/tools/${t.id}`)}>
                       <td className="px-4 py-3">
                         <div className="font-medium text-gray-900">{t.name || "—"}</div>
                         <div className="text-xs text-gray-400">{t.vendor}{t.version ? ` · v${t.version}` : ""}</div>
@@ -176,11 +176,8 @@ export default function ToolListPage() {
                       <td className="px-4 py-3 text-center">
                         <DeploymentBadge status={t.deployment_status} />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-1 justify-end">
-                          <button onClick={() => navigate(`/tools/${t.id}`)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500" title="View">
-                            <Eye size={15} />
-                          </button>
                           <button onClick={() => navigate(`/tools/${t.id}/edit`)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500" title="Edit">
                             <Pencil size={15} />
                           </button>

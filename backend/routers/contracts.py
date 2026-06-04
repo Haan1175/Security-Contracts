@@ -164,26 +164,44 @@ def unarchive_contract(contract_id: int, db: Session = Depends(get_db)):
 
 
 _CONTRACT_BOOL_FIELDS = {"nda", "auto_renewal", "amortize", "archived"}
-_CONTRACT_INT_FIELDS = {"cost_center", "notification_term_days"}
-_CONTRACT_FLOAT_FIELDS = {"contract_amount", "contract_amount_usd"}
+_CONTRACT_INT_FIELDS = {"cost_center", "notification_term_days", "contract_days", "contract_months"}
+_MONTHS = ["nov", "dec", "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct"]
+_FY_COLS = {f"fy{yr}_{mo}" for yr in ["25", "26", "27", "28"] for mo in _MONTHS}
+_CONTRACT_FLOAT_FIELDS = {"contract_amount", "contract_amount_usd", "monthly_amount_usd"} | _FY_COLS
 _CONTRACT_DATE_FIELDS = {"start_date", "end_date"}
+
+_CONTRACT_COLUMN_MAP = {
+    "purchase_order_number": "po_number",
+    "product_or_service": "product_or_service",
+    "anaplan_unique_id": "anaplan_id",
+    "security_contract_owner": "owner_name",
+    "security_contract_owner_email": "owner_email",
+    "notification_term_(days)": "notification_term_days",
+    "renewed_(y/n)": "renewed",
+    "contract_amount_(usd)": "contract_amount_usd",
+    "auto_renewal": "auto_renewal",
+    "days": "contract_days",
+    "months": "contract_months",
+    "monthly_amount_(usd)": "monthly_amount_usd",
+}
 
 
 def _parse_contract_row(row: dict) -> dict:
     data = {}
     for k, v in row.items():
-        k = k.strip().lower().replace(" ", "_")
+        k = k.strip().lower().replace(" ", "_").strip("_")
+        k = _CONTRACT_COLUMN_MAP.get(k, k)
         v = v.strip() if isinstance(v, str) else v
-        if v == "":
+        if v == "" or v is None:
             continue
         if k in _CONTRACT_BOOL_FIELDS:
-            data[k] = v.lower() in ("true", "yes", "1")
+            data[k] = str(v).lower() in ("true", "yes", "1", "y")
         elif k in _CONTRACT_INT_FIELDS:
-            data[k] = int(v)
+            data[k] = int(float(str(v)))
         elif k in _CONTRACT_FLOAT_FIELDS:
-            data[k] = float(v)
+            data[k] = float(str(v).replace(",", "").replace("$", ""))
         elif k in _CONTRACT_DATE_FIELDS:
-            data[k] = date.fromisoformat(v)
+            data[k] = date.fromisoformat(str(v))
         else:
             data[k] = v
     return data
@@ -191,7 +209,7 @@ def _parse_contract_row(row: dict) -> dict:
 
 @router.post("/import-csv")
 async def import_contracts_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    if not file.filename.endswith(".csv"):
+    if not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a .csv")
 
     content = await file.read()
