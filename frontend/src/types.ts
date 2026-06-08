@@ -198,6 +198,7 @@ export interface ToolScoreRow {
   deployment_status: string;
   effectiveness_score: number;
   coverage_score: number;
+  annual_cost: number | null;
 }
 
 export interface ToolGroupRow {

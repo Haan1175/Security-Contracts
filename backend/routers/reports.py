@@ -267,6 +267,7 @@ def get_tool_scores(db: Session = Depends(get_db)):
             "deployment_status": t.deployment_status,
             "effectiveness_score": t.effectiveness_score,
             "coverage_score": t.coverage_score,
+            "annual_cost": t.annual_cost,
         }
         for t in tools
     ]

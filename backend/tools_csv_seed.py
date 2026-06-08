@@ -13,8 +13,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend.database import engine, SessionLocal, Base
 from backend.models import SecurityTool
 
-CSV_PATH = os.path.join(
-    os.path.expanduser("~"), "Downloads", "Security Tool Stack(Security Tools Current).csv"
+_FILENAME = "Security Tool Stack(Security Tools Current).csv"
+CSV_PATH = (
+    os.environ.get("TOOLS_CSV")
+    or (p := os.path.join("/app/data", _FILENAME)) and os.path.exists(p) and p
+    or os.path.join(os.path.expanduser("~"), "Downloads", _FILENAME)
 )
 
 # CSV column indices (0-based), data starts at row 3

@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend,
-  RadarChart, PolarGrid, PolarAngleAxis, Radar, ScatterChart, Scatter, ZAxis,
+  RadarChart, PolarGrid, PolarAngleAxis, Radar, ScatterChart, Scatter, ZAxis, ReferenceLine, ReferenceArea,
 } from "recharts";
 import { fetchSummary, fetchGroupReport, fetchExpiringContracts, fetchEnums, fetchFYSpend } from "../api/contracts";
 import { fetchToolSummary, fetchToolScores, fetchToolGroup } from "../api/tools";
@@ -60,6 +60,135 @@ const TOOL_GROUP_FIELDS = [
   { value: "deployment_status", label: "Deployment Status" },
   { value: "owner_name", label: "Owner" },
 ];
+
+import type { ToolScoreRow } from "../types";
+
+const CHART_MARGIN = { left: 20, right: 40, top: 20, bottom: 60 };
+const Y_AXIS_WIDTH = 75;
+const PLOT_LEFT = CHART_MARGIN.left + Y_AXIS_WIDTH;
+
+function ToolValueScatter({ toolScores }: { toolScores: ToolScoreRow[] }) {
+  const scatterData = toolScores
+    .filter(t => t.annual_cost != null && t.effectiveness_score != null && t.coverage_score != null)
+    .map(t => ({
+      ...t,
+      avg_score: Math.round(((t.effectiveness_score + t.coverage_score) / 2) * 10) / 10,
+      cost: t.annual_cost as number,
+    }));
+
+  const allCosts = scatterData.map(t => t.cost).sort((a, b) => a - b);
+  const costMax = allCosts.length > 0 ? allCosts[allCosts.length - 1] : 1;
+  const medianCost = allCosts.length > 0 ? allCosts[Math.floor(allCosts.length / 2)] : 0;
+  const scoresMid = 2.5;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-8">
+      <div className="mb-5">
+        <h2 className="text-lg font-semibold text-gray-900">Tool Value Analysis</h2>
+        <p className="text-sm text-gray-500 mt-0.5">
+          Average score (effectiveness + coverage ÷ 2) vs. annual cost.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
+        {[
+          { label: "High Score · High Cost", desc: "Top performers — justify the spend", color: "bg-green-50 border-green-200 text-green-700" },
+          { label: "High Score · Low Cost", desc: "Best value — high return on investment", color: "bg-blue-50 border-blue-200 text-blue-700" },
+          { label: "Low Score · High Cost", desc: "Expensive underperformers — review for replacement", color: "bg-red-50 border-red-200 text-red-700" },
+          { label: "Low Score · Low Cost", desc: "Weak and cheap — consider removing", color: "bg-orange-50 border-orange-200 text-orange-700" },
+        ].map(q => (
+          <div key={q.label} className={`border rounded-lg px-3 py-2 ${q.color}`}>
+            <div className="text-xs font-semibold">{q.label}</div>
+            <div className="text-xs opacity-80 mt-0.5">{q.desc}</div>
+          </div>
+        ))}
+      </div>
+
+      <ResponsiveContainer width="100%" height={460}>
+        <ScatterChart margin={{ left: CHART_MARGIN.left, right: CHART_MARGIN.right, top: CHART_MARGIN.top, bottom: CHART_MARGIN.bottom }}>
+          <CartesianGrid strokeDasharray="4 4" stroke="#e5e7eb" />
+          <XAxis
+            type="number" dataKey="cost" name="Annual Cost"
+            domain={[0, Math.ceil(costMax * 1.05)]} tickFormatter={v => fmt(v)}
+            tick={{ fontSize: 11 }} tickLine={false}
+            label={{ value: "Annual Cost (USD)", position: "insideBottom", offset: -30, fontSize: 12, fill: "#6b7280" }}
+          />
+          <YAxis
+            type="number" dataKey="avg_score" name="Avg Score"
+            domain={[0, 5]} ticks={[0, 1, 2, 3, 4, 5]} width={Y_AXIS_WIDTH}
+            tick={{ fontSize: 12 }} tickLine={false}
+            label={{ value: "Avg Score (0–5)", angle: -90, position: "insideLeft", offset: -5, fontSize: 12, fill: "#6b7280" }}
+          />
+          <ZAxis range={[80, 80]} />
+          <ReferenceLine x={medianCost} stroke="#9ca3af" strokeDasharray="6 4" strokeWidth={1.5} />
+          <ReferenceLine y={scoresMid} stroke="#9ca3af" strokeDasharray="6 4" strokeWidth={1.5} />
+          <Tooltip
+            cursor={{ stroke: "#d1d5db", strokeDasharray: "4 4" }}
+            content={({ active, payload }) => {
+              if (!active || !payload?.length) return null;
+              const d = payload[0].payload;
+              const isHighScore = d.avg_score >= scoresMid;
+              const isHighCost = d.cost >= medianCost;
+              const quadrant =
+                isHighScore && isHighCost ? { label: "High Score · High Cost", color: "text-green-700" }
+                : isHighScore && !isHighCost ? { label: "High Score · Low Cost", color: "text-blue-700" }
+                : !isHighScore && isHighCost ? { label: "Low Score · High Cost", color: "text-red-600" }
+                : { label: "Low Score · Low Cost", color: "text-orange-600" };
+              return (
+                <div className="bg-white border border-gray-200 rounded-xl shadow-xl p-4 text-sm w-56">
+                  <p className="font-bold text-gray-900 truncate">{d.name}</p>
+                  <p className="text-gray-400 text-xs mb-2">{d.vendor}</p>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between"><span className="text-gray-500">Effectiveness</span><span className="font-semibold">{d.effectiveness_score}/5</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Coverage</span><span className="font-semibold">{d.coverage_score}/5</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Avg Score</span><span className="font-semibold">{d.avg_score}/5</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Annual Cost</span><span className="font-semibold">{fmtFull(d.cost)}</span></div>
+                    <div className="flex justify-between items-center pt-1 border-t border-gray-100">
+                      <span className="text-gray-500">Quadrant</span>
+                      <span className={`text-xs font-semibold ${quadrant.color}`}>{quadrant.label}</span>
+                    </div>
+                  </div>
+                  <div className="mt-2"><DeploymentBadge status={d.deployment_status} /></div>
+                </div>
+              );
+            }}
+          />
+          <Scatter
+            data={scatterData}
+            shape={(props: { cx?: number; cy?: number; payload?: { deployment_status?: string; avg_score?: number; cost?: number } }) => {
+              const { cx = 0, cy = 0, payload } = props;
+              const avgScore = payload?.avg_score ?? 0;
+              const cost = payload?.cost ?? 0;
+              const fill =
+                avgScore >= scoresMid && cost >= medianCost ? "#2f9e44"
+                : avgScore >= scoresMid && cost < medianCost ? "#1c7ed6"
+                : avgScore < scoresMid && cost >= medianCost ? "#f03e3e"
+                : "#e67700";
+              const faded = payload?.deployment_status === "Retired" || payload?.deployment_status === "Deprecated";
+              return (
+                <g>
+                  <circle cx={cx} cy={cy} r={faded ? 6 : 9} fill={fill} opacity={faded ? 0.35 : 0.82} stroke="white" strokeWidth={2} />
+                  {faded && <circle cx={cx} cy={cy} r={9} fill="none" stroke={fill} strokeWidth={1} opacity={0.4} strokeDasharray="3 2" />}
+                </g>
+              );
+            }}
+          />
+        </ScatterChart>
+      </ResponsiveContainer>
+
+      <div className="flex flex-wrap gap-5 mt-4 justify-center text-xs text-gray-500">
+        <div className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full inline-block bg-green-600 opacity-80" /> High Score + High Cost</div>
+        <div className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full inline-block bg-blue-600 opacity-80" /> High Score + Low Cost</div>
+        <div className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full inline-block bg-red-500 opacity-80" /> Low Score + High Cost</div>
+        <div className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full inline-block bg-orange-500 opacity-80" /> Low Score + Low Cost</div>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-3.5 h-3.5 rounded-full border border-gray-400 opacity-50" style={{ borderStyle: "dashed" }} />
+          Deprecated / Retired (faded)
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // Section tab switcher
 type Tab = "contracts" | "tools";
@@ -371,155 +500,9 @@ export default function ReportingPage() {
             </div>
           )}
 
-          {/* ── Effectiveness vs Coverage correlation chart ── */}
+          {/* ── Avg Score vs Cost scatter chart ── */}
           {toolScores && toolScores.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-8">
-              <div className="mb-5">
-                <h2 className="text-lg font-semibold text-gray-900">Effectiveness vs. Coverage Correlation</h2>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  Effectiveness (x-axis) measures how well a tool performs its function. Coverage (y-axis) measures the breadth of environment it protects. Ideal tools land in the top-right quadrant.
-                </p>
-              </div>
-
-              {/* Quadrant legend */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
-                {[
-                  { label: "High Effectiveness · High Coverage", desc: "Top performers — maintain & scale", color: "bg-green-50 border-green-200 text-green-700" },
-                  { label: "Low Effectiveness · High Coverage", desc: "Wide reach but underperforming — tune or replace", color: "bg-yellow-50 border-yellow-200 text-yellow-700" },
-                  { label: "High Effectiveness · Low Coverage", desc: "Performing well but limited scope — expand", color: "bg-blue-50 border-blue-200 text-blue-700" },
-                  { label: "Low Effectiveness · Low Coverage", desc: "Weak tools — review for removal", color: "bg-red-50 border-red-200 text-red-700" },
-                ].map(q => (
-                  <div key={q.label} className={`border rounded-lg px-3 py-2 ${q.color}`}>
-                    <div className="text-xs font-semibold">{q.label}</div>
-                    <div className="text-xs opacity-80 mt-0.5">{q.desc}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="relative">
-                <ResponsiveContainer width="100%" height={460}>
-                  <ScatterChart margin={{ left: 20, right: 40, top: 20, bottom: 40 }}>
-                    {/* Quadrant background regions rendered as reference areas */}
-                    <defs>
-                      <pattern id="q-tr" patternUnits="userSpaceOnUse" width="8" height="8">
-                        <rect width="8" height="8" fill="#f0fdf4" />
-                      </pattern>
-                      <pattern id="q-tl" patternUnits="userSpaceOnUse" width="8" height="8">
-                        <rect width="8" height="8" fill="#fefce8" />
-                      </pattern>
-                      <pattern id="q-br" patternUnits="userSpaceOnUse" width="8" height="8">
-                        <rect width="8" height="8" fill="#eff6ff" />
-                      </pattern>
-                      <pattern id="q-bl" patternUnits="userSpaceOnUse" width="8" height="8">
-                        <rect width="8" height="8" fill="#fff1f2" />
-                      </pattern>
-                    </defs>
-                    <CartesianGrid strokeDasharray="4 4" stroke="#e5e7eb" />
-                    <XAxis
-                      type="number"
-                      dataKey="effectiveness_score"
-                      name="Effectiveness"
-                      domain={[0, 5]}
-                      ticks={[0, 1, 2, 3, 4, 5]}
-                      tick={{ fontSize: 12 }}
-                      tickLine={false}
-                      label={{ value: "← Lower Effectiveness   Effectiveness Score   Higher Effectiveness →", position: "insideBottom", offset: -28, fontSize: 12, fill: "#6b7280" }}
-                    />
-                    <YAxis
-                      type="number"
-                      dataKey="coverage_score"
-                      name="Coverage"
-                      domain={[0, 5]}
-                      ticks={[0, 1, 2, 3, 4, 5]}
-                      tick={{ fontSize: 12 }}
-                      tickLine={false}
-                      label={{ value: "Coverage Score", angle: -90, position: "insideLeft", offset: -5, fontSize: 12, fill: "#6b7280" }}
-                    />
-                    <ZAxis range={[80, 80]} />
-                    <Tooltip
-                      cursor={{ stroke: "#d1d5db", strokeDasharray: "4 4" }}
-                      content={({ active, payload }) => {
-                        if (!active || !payload?.length) return null;
-                        const d = payload[0].payload;
-                        const eff = d.effectiveness_score;
-                        const cov = d.coverage_score;
-                        const quadrant =
-                          eff >= 2.5 && cov >= 2.5 ? { label: "Top Performer", color: "text-green-700" }
-                          : eff < 2.5 && cov >= 2.5 ? { label: "Wide but Weak", color: "text-yellow-700" }
-                          : eff >= 2.5 && cov < 2.5 ? { label: "Effective but Narrow", color: "text-blue-700" }
-                          : { label: "Needs Review", color: "text-red-600" };
-                        return (
-                          <div className="bg-white border border-gray-200 rounded-xl shadow-xl p-4 text-sm w-52">
-                            <p className="font-bold text-gray-900 truncate">{d.name}</p>
-                            <p className="text-gray-400 text-xs mb-2">{d.vendor}</p>
-                            <div className="space-y-1.5">
-                              <div className="flex justify-between">
-                                <span className="text-gray-500">Effectiveness</span>
-                                <span className="font-semibold text-gray-800">{eff}/5</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-500">Coverage</span>
-                                <span className="font-semibold text-gray-800">{cov}/5</span>
-                              </div>
-                              <div className="flex justify-between items-center pt-1 border-t border-gray-100">
-                                <span className="text-gray-500">Quadrant</span>
-                                <span className={`text-xs font-semibold ${quadrant.color}`}>{quadrant.label}</span>
-                              </div>
-                            </div>
-                            <div className="mt-2">
-                              <DeploymentBadge status={d.deployment_status} />
-                            </div>
-                          </div>
-                        );
-                      }}
-                    />
-                    <Scatter
-                      data={toolScores}
-                      shape={(props: { cx?: number; cy?: number; payload?: { deployment_status?: string; effectiveness_score?: number; coverage_score?: number } }) => {
-                        const { cx = 0, cy = 0, payload } = props;
-                        const eff = payload?.effectiveness_score ?? 0;
-                        const cov = payload?.coverage_score ?? 0;
-                        // Color by quadrant position, with status influencing opacity
-                        let fill =
-                          eff >= 2.5 && cov >= 2.5 ? "#2f9e44"   // top-right: green
-                          : eff < 2.5 && cov >= 2.5 ? "#e67700"   // top-left: orange
-                          : eff >= 2.5 && cov < 2.5 ? "#1c7ed6"   // bottom-right: blue
-                          : "#f03e3e";                             // bottom-left: red
-                        const isRetiredOrDeprecated = payload?.deployment_status === "Retired" || payload?.deployment_status === "Deprecated";
-                        return (
-                          <g>
-                            <circle cx={cx} cy={cy} r={isRetiredOrDeprecated ? 6 : 9} fill={fill} opacity={isRetiredOrDeprecated ? 0.35 : 0.82} stroke="white" strokeWidth={2} />
-                            {isRetiredOrDeprecated && (
-                              <circle cx={cx} cy={cy} r={9} fill="none" stroke={fill} strokeWidth={1} opacity={0.4} strokeDasharray="3 2" />
-                            )}
-                          </g>
-                        );
-                      }}
-                    />
-                  </ScatterChart>
-                </ResponsiveContainer>
-
-                {/* Midpoint reference line labels — positioned as overlay */}
-                <div className="absolute inset-0 pointer-events-none" style={{ left: 44, right: 40, top: 20, bottom: 40 }}>
-                  <div className="absolute text-xs font-semibold text-green-600 opacity-40" style={{ right: "4%", top: "4%" }}>HIGH / HIGH</div>
-                  <div className="absolute text-xs font-semibold text-yellow-600 opacity-40" style={{ left: "2%", top: "4%" }}>LOW / HIGH</div>
-                  <div className="absolute text-xs font-semibold text-blue-600 opacity-40" style={{ right: "4%", bottom: "6%" }}>HIGH / LOW</div>
-                  <div className="absolute text-xs font-semibold text-red-500 opacity-40" style={{ left: "2%", bottom: "6%" }}>LOW / LOW</div>
-                </div>
-              </div>
-
-              {/* Legend row */}
-              <div className="flex flex-wrap gap-5 mt-4 justify-center text-xs text-gray-500">
-                <div className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full inline-block bg-green-600 opacity-80" /> High Effectiveness + High Coverage</div>
-                <div className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full inline-block bg-blue-600 opacity-80" /> High Effectiveness + Low Coverage</div>
-                <div className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full inline-block bg-orange-500 opacity-80" /> Low Effectiveness + High Coverage</div>
-                <div className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full inline-block bg-red-500 opacity-80" /> Low Effectiveness + Low Coverage</div>
-                <div className="flex items-center gap-1.5">
-                  <span className="inline-block w-3.5 h-3.5 rounded-full border border-gray-400 opacity-50" style={{ borderStyle: "dashed" }} />
-                  Deprecated / Retired (faded)
-                </div>
-              </div>
-            </div>
+            <ToolValueScatter toolScores={toolScores} />
           )}
 
           {/* Tool group breakdown */}

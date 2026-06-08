@@ -13,8 +13,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend.database import engine, SessionLocal, Base
 from backend.models import Contract
 
-CSV_PATH = os.path.join(
-    os.path.expanduser("~"), "Downloads", "Security Contracts(contracts).csv"
+_FILENAME = "Security Contracts(contracts).csv"
+CSV_PATH = (
+    os.environ.get("CONTRACTS_CSV")
+    or (p := os.path.join("/app/data", _FILENAME)) and os.path.exists(p) and p
+    or os.path.join(os.path.expanduser("~"), "Downloads", _FILENAME)
 )
 
 FY_COLS = [
