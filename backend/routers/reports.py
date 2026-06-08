@@ -114,6 +114,54 @@ def get_grouped_report(
     ]
 
 
+@router.get("/fy-spend")
+def get_fy_spend(db: Session = Depends(get_db)):
+    """
+    Returns summed contract spend by fiscal year and quarter.
+    FY runs Nov–Oct; quarters: Q1=Nov/Dec/Jan, Q2=Feb/Mar/Apr, Q3=May/Jun/Jul, Q4=Aug/Sep/Oct.
+    """
+    from ..models import Contract as C
+
+    FY_QUARTERS = {
+        "FY25": {
+            "Q1": [C.fy25_nov, C.fy25_dec, C.fy25_jan],
+            "Q2": [C.fy25_feb, C.fy25_mar, C.fy25_apr],
+            "Q3": [C.fy25_may, C.fy25_jun, C.fy25_jul],
+            "Q4": [C.fy25_aug, C.fy25_sep, C.fy25_oct],
+        },
+        "FY26": {
+            "Q1": [C.fy26_nov, C.fy26_dec, C.fy26_jan],
+            "Q2": [C.fy26_feb, C.fy26_mar, C.fy26_apr],
+            "Q3": [C.fy26_may, C.fy26_jun, C.fy26_jul],
+            "Q4": [C.fy26_aug, C.fy26_sep, C.fy26_oct],
+        },
+        "FY27": {
+            "Q1": [C.fy27_nov, C.fy27_dec, C.fy27_jan],
+            "Q2": [C.fy27_feb, C.fy27_mar, C.fy27_apr],
+            "Q3": [C.fy27_may, C.fy27_jun, C.fy27_jul],
+            "Q4": [C.fy27_aug, C.fy27_sep, C.fy27_oct],
+        },
+        "FY28": {
+            "Q1": [C.fy28_nov, C.fy28_dec, C.fy28_jan],
+            "Q2": [C.fy28_feb, C.fy28_mar, C.fy28_apr],
+            "Q3": [C.fy28_may, C.fy28_jun, C.fy28_jul],
+            "Q4": [C.fy28_aug, C.fy28_sep, C.fy28_oct],
+        },
+    }
+
+    result = []
+    for q_label in ["Q1", "Q2", "Q3", "Q4"]:
+        row: dict = {"quarter": q_label}
+        for fy, quarters in FY_QUARTERS.items():
+            cols = quarters[q_label]
+            total = db.query(
+                func.sum(func.coalesce(cols[0], 0) + func.coalesce(cols[1], 0) + func.coalesce(cols[2], 0))
+            ).filter(Contract.archived == False).scalar() or 0
+            row[fy] = round(float(total), 2)
+        result.append(row)
+    return result
+
+
 @router.get("/expiring")
 def get_expiring_contracts(
     days: int = Query(90),
@@ -165,22 +213,24 @@ def get_tool_summary(db: Session = Depends(get_db)):
         SecurityTool.coverage_score.isnot(None),
     ).scalar() or 0
 
-    # Score distribution buckets
+    # Score distribution buckets (0–5 scale)
     scored = base.filter(SecurityTool.effectiveness_score.isnot(None)).all()
-    eff_buckets = {"0-25": 0, "26-50": 0, "51-75": 0, "76-100": 0}
-    cov_buckets = {"0-25": 0, "26-50": 0, "51-75": 0, "76-100": 0}
+    eff_buckets = {"0-1": 0, "1-2": 0, "2-3": 0, "3-4": 0, "4-5": 0}
+    cov_buckets = {"0-1": 0, "1-2": 0, "2-3": 0, "3-4": 0, "4-5": 0}
     for t in scored:
         for buckets, score in [(eff_buckets, t.effectiveness_score), (cov_buckets, t.coverage_score)]:
             if score is None:
                 continue
-            if score <= 25:
-                buckets["0-25"] += 1
-            elif score <= 50:
-                buckets["26-50"] += 1
-            elif score <= 75:
-                buckets["51-75"] += 1
+            if score <= 1:
+                buckets["0-1"] += 1
+            elif score <= 2:
+                buckets["1-2"] += 1
+            elif score <= 3:
+                buckets["2-3"] += 1
+            elif score <= 4:
+                buckets["3-4"] += 1
             else:
-                buckets["76-100"] += 1
+                buckets["4-5"] += 1
 
     return {
         "total": total,

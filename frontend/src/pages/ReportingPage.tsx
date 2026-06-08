@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend,
   RadarChart, PolarGrid, PolarAngleAxis, Radar, ScatterChart, Scatter, ZAxis,
 } from "recharts";
-import { fetchSummary, fetchGroupReport, fetchExpiringContracts, fetchEnums } from "../api/contracts";
+import { fetchSummary, fetchGroupReport, fetchExpiringContracts, fetchEnums, fetchFYSpend } from "../api/contracts";
 import { fetchToolSummary, fetchToolScores, fetchToolGroup } from "../api/tools";
 import StatusBadge from "../components/StatusBadge";
 import DeploymentBadge from "../components/DeploymentBadge";
@@ -75,6 +75,7 @@ export default function ReportingPage() {
   const { data: groupData } = useQuery({ queryKey: ["group", groupBy], queryFn: () => fetchGroupReport(groupBy) });
   const { data: expiring } = useQuery({ queryKey: ["expiring", expiringDays], queryFn: () => fetchExpiringContracts(expiringDays) });
   const { data: enums } = useQuery({ queryKey: ["enums"], queryFn: fetchEnums });
+  const { data: fySpend } = useQuery({ queryKey: ["fySpend"], queryFn: fetchFYSpend });
 
   // Tool data
   const { data: toolSummary } = useQuery({ queryKey: ["toolSummary"], queryFn: fetchToolSummary });
@@ -184,6 +185,78 @@ export default function ReportingPage() {
             )}
           </div>
 
+          {/* FY Quarterly Spend */}
+          {fySpend && fySpend.some(q => q.FY25 > 0 || q.FY26 > 0 || q.FY27 > 0 || q.FY28 > 0) && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-8">
+              <div className="mb-4">
+                <h2 className="text-base font-semibold text-gray-800">FY Spend by Quarter</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Aggregated amortized spend across all contracts · Q1 = Nov–Jan · Q2 = Feb–Apr · Q3 = May–Jul · Q4 = Aug–Oct</p>
+              </div>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={fySpend} margin={{ left: 10, right: 20, top: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="quarter" tick={{ fontSize: 13, fontWeight: 600 }} />
+                  <YAxis tickFormatter={v => fmt(v)} tick={{ fontSize: 11 }} />
+                  <Tooltip
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      return (
+                        <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-sm">
+                          <p className="font-semibold text-gray-700 mb-2">{label}</p>
+                          {payload.map((p, i) => (
+                            <p key={i} style={{ color: p.color }} className="text-xs">
+                              {p.name}: <strong>{fmtFull(p.value as number)}</strong>
+                            </p>
+                          ))}
+                        </div>
+                      );
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="FY25" name="FY25" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="FY26" name="FY26" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="FY27" name="FY27" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="FY28" name="FY28" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+              <div className="mt-5 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left py-2 text-xs font-semibold text-gray-500 uppercase">Quarter</th>
+                      {["FY25", "FY26", "FY27", "FY28"].map(fy => (
+                        <th key={fy} className="text-right py-2 text-xs font-semibold text-gray-500 uppercase">{fy}</th>
+                      ))}
+                      <th className="text-right py-2 text-xs font-semibold text-gray-500 uppercase">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {fySpend.map(row => {
+                      const total = row.FY25 + row.FY26 + row.FY27 + row.FY28;
+                      return (
+                        <tr key={row.quarter} className="hover:bg-gray-50">
+                          <td className="py-2.5 font-semibold text-gray-700">{row.quarter}</td>
+                          {(["FY25", "FY26", "FY27", "FY28"] as const).map(fy => (
+                            <td key={fy} className="py-2.5 text-right text-gray-600">{row[fy] > 0 ? fmtFull(row[fy]) : "—"}</td>
+                          ))}
+                          <td className="py-2.5 text-right font-semibold text-gray-900">{total > 0 ? fmtFull(total) : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                    <tr className="border-t-2 border-gray-200">
+                      <td className="py-2.5 font-bold text-gray-800">Annual Total</td>
+                      {(["FY25", "FY26", "FY27", "FY28"] as const).map(fy => {
+                        const fyTotal = fySpend.reduce((sum, q) => sum + q[fy], 0);
+                        return <td key={fy} className="py-2.5 text-right font-bold text-gray-900">{fyTotal > 0 ? fmtFull(fyTotal) : "—"}</td>;
+                      })}
+                      <td className="py-2.5 text-right font-bold text-gray-900">{fmtFull(fySpend.reduce((s, q) => s + q.FY25 + q.FY26 + q.FY27 + q.FY28, 0))}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Expiring contracts */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
             <div className="flex items-center justify-between mb-4">
@@ -239,14 +312,14 @@ export default function ReportingPage() {
               <SummaryCard
                 label="Avg Effectiveness"
                 value={`${toolSummary.avg_effectiveness_score}`}
-                sub="out of 100"
-                color={toolSummary.avg_effectiveness_score >= 75 ? "text-green-700" : toolSummary.avg_effectiveness_score >= 50 ? "text-yellow-700" : "text-orange-600"}
+                sub="out of 5"
+                color={toolSummary.avg_effectiveness_score >= 4 ? "text-green-700" : toolSummary.avg_effectiveness_score >= 2.5 ? "text-yellow-700" : "text-orange-600"}
               />
               <SummaryCard
                 label="Avg Coverage"
                 value={`${toolSummary.avg_coverage_score}`}
-                sub="out of 100"
-                color={toolSummary.avg_coverage_score >= 75 ? "text-green-700" : toolSummary.avg_coverage_score >= 50 ? "text-yellow-700" : "text-orange-600"}
+                sub="out of 5"
+                color={toolSummary.avg_coverage_score >= 4 ? "text-green-700" : toolSummary.avg_coverage_score >= 2.5 ? "text-yellow-700" : "text-orange-600"}
               />
               <SummaryCard
                 label="Deprecated / Retired"
@@ -346,8 +419,8 @@ export default function ReportingPage() {
                       type="number"
                       dataKey="effectiveness_score"
                       name="Effectiveness"
-                      domain={[0, 100]}
-                      ticks={[0, 25, 50, 75, 100]}
+                      domain={[0, 5]}
+                      ticks={[0, 1, 2, 3, 4, 5]}
                       tick={{ fontSize: 12 }}
                       tickLine={false}
                       label={{ value: "← Lower Effectiveness   Effectiveness Score   Higher Effectiveness →", position: "insideBottom", offset: -28, fontSize: 12, fill: "#6b7280" }}
@@ -356,8 +429,8 @@ export default function ReportingPage() {
                       type="number"
                       dataKey="coverage_score"
                       name="Coverage"
-                      domain={[0, 100]}
-                      ticks={[0, 25, 50, 75, 100]}
+                      domain={[0, 5]}
+                      ticks={[0, 1, 2, 3, 4, 5]}
                       tick={{ fontSize: 12 }}
                       tickLine={false}
                       label={{ value: "Coverage Score", angle: -90, position: "insideLeft", offset: -5, fontSize: 12, fill: "#6b7280" }}
@@ -371,9 +444,9 @@ export default function ReportingPage() {
                         const eff = d.effectiveness_score;
                         const cov = d.coverage_score;
                         const quadrant =
-                          eff >= 50 && cov >= 50 ? { label: "Top Performer", color: "text-green-700" }
-                          : eff < 50 && cov >= 50 ? { label: "Wide but Weak", color: "text-yellow-700" }
-                          : eff >= 50 && cov < 50 ? { label: "Effective but Narrow", color: "text-blue-700" }
+                          eff >= 2.5 && cov >= 2.5 ? { label: "Top Performer", color: "text-green-700" }
+                          : eff < 2.5 && cov >= 2.5 ? { label: "Wide but Weak", color: "text-yellow-700" }
+                          : eff >= 2.5 && cov < 2.5 ? { label: "Effective but Narrow", color: "text-blue-700" }
                           : { label: "Needs Review", color: "text-red-600" };
                         return (
                           <div className="bg-white border border-gray-200 rounded-xl shadow-xl p-4 text-sm w-52">
@@ -382,11 +455,11 @@ export default function ReportingPage() {
                             <div className="space-y-1.5">
                               <div className="flex justify-between">
                                 <span className="text-gray-500">Effectiveness</span>
-                                <span className="font-semibold text-gray-800">{eff}/100</span>
+                                <span className="font-semibold text-gray-800">{eff}/5</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-gray-500">Coverage</span>
-                                <span className="font-semibold text-gray-800">{cov}/100</span>
+                                <span className="font-semibold text-gray-800">{cov}/5</span>
                               </div>
                               <div className="flex justify-between items-center pt-1 border-t border-gray-100">
                                 <span className="text-gray-500">Quadrant</span>
@@ -408,10 +481,10 @@ export default function ReportingPage() {
                         const cov = payload?.coverage_score ?? 0;
                         // Color by quadrant position, with status influencing opacity
                         let fill =
-                          eff >= 50 && cov >= 50 ? "#2f9e44"   // top-right: green
-                          : eff < 50 && cov >= 50 ? "#e67700"   // top-left: orange
-                          : eff >= 50 && cov < 50 ? "#1c7ed6"   // bottom-right: blue
-                          : "#f03e3e";                           // bottom-left: red
+                          eff >= 2.5 && cov >= 2.5 ? "#2f9e44"   // top-right: green
+                          : eff < 2.5 && cov >= 2.5 ? "#e67700"   // top-left: orange
+                          : eff >= 2.5 && cov < 2.5 ? "#1c7ed6"   // bottom-right: blue
+                          : "#f03e3e";                             // bottom-left: red
                         const isRetiredOrDeprecated = payload?.deployment_status === "Retired" || payload?.deployment_status === "Deprecated";
                         return (
                           <g>
@@ -468,12 +541,12 @@ export default function ReportingPage() {
                   <ResponsiveContainer width="100%" height={280}>
                     <BarChart data={toolGroupData} layout="vertical" margin={{ left: 0, right: 20, top: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                      <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} />
+                      <XAxis type="number" domain={[0, 5]} ticks={[0, 1, 2, 3, 4, 5]} tick={{ fontSize: 11 }} />
                       <YAxis type="category" dataKey="group_value" width={150} tick={{ fontSize: 11 }} tickFormatter={s => truncate(String(s))} />
                       <Tooltip content={<CustomTooltip />} />
                       <Bar dataKey="avg_effectiveness" name="Avg Effectiveness" radius={[0, 4, 4, 0]}>
                         {toolGroupData.map((row, i) => {
-                          const c = row.avg_effectiveness >= 75 ? "#2f9e44" : row.avg_effectiveness >= 50 ? "#fab005" : "#fa5252";
+                          const c = row.avg_effectiveness >= 4 ? "#2f9e44" : row.avg_effectiveness >= 2.5 ? "#fab005" : "#fa5252";
                           return <Cell key={i} fill={c} />;
                         })}
                       </Bar>
@@ -485,12 +558,12 @@ export default function ReportingPage() {
                   <ResponsiveContainer width="100%" height={280}>
                     <BarChart data={toolGroupData} layout="vertical" margin={{ left: 0, right: 20, top: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                      <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} />
+                      <XAxis type="number" domain={[0, 5]} ticks={[0, 1, 2, 3, 4, 5]} tick={{ fontSize: 11 }} />
                       <YAxis type="category" dataKey="group_value" width={150} tick={{ fontSize: 11 }} tickFormatter={s => truncate(String(s))} />
                       <Tooltip content={<CustomTooltip />} />
                       <Bar dataKey="avg_coverage" name="Avg Coverage" radius={[0, 4, 4, 0]}>
                         {toolGroupData.map((row, i) => {
-                          const c = row.avg_coverage >= 75 ? "#1098ad" : row.avg_coverage >= 50 ? "#7950f2" : "#e67700";
+                          const c = row.avg_coverage >= 4 ? "#1098ad" : row.avg_coverage >= 2.5 ? "#7950f2" : "#e67700";
                           return <Cell key={i} fill={c} />;
                         })}
                       </Bar>
@@ -522,8 +595,8 @@ export default function ReportingPage() {
                             <div className="w-24">
                               <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                                 <div
-                                  className={`h-2 rounded-full ${row.avg_effectiveness >= 75 ? "bg-green-500" : row.avg_effectiveness >= 50 ? "bg-yellow-400" : "bg-red-400"}`}
-                                  style={{ width: `${row.avg_effectiveness}%` }}
+                                  className={`h-2 rounded-full ${row.avg_effectiveness >= 4 ? "bg-green-500" : row.avg_effectiveness >= 2.5 ? "bg-yellow-400" : "bg-red-400"}`}
+                                  style={{ width: `${(row.avg_effectiveness / 5) * 100}%` }}
                                 />
                               </div>
                             </div>
@@ -535,8 +608,8 @@ export default function ReportingPage() {
                             <div className="w-24">
                               <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                                 <div
-                                  className={`h-2 rounded-full ${row.avg_coverage >= 75 ? "bg-blue-500" : row.avg_coverage >= 50 ? "bg-purple-400" : "bg-orange-400"}`}
-                                  style={{ width: `${row.avg_coverage}%` }}
+                                  className={`h-2 rounded-full ${row.avg_coverage >= 4 ? "bg-blue-500" : row.avg_coverage >= 2.5 ? "bg-purple-400" : "bg-orange-400"}`}
+                                  style={{ width: `${(row.avg_coverage / 5) * 100}%` }}
                                 />
                               </div>
                             </div>

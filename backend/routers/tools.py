@@ -126,7 +126,8 @@ def unarchive_tool(tool_id: int, db: Session = Depends(get_db)):
 
 
 _TOOL_BOOL_FIELDS = {"archived", "auto_renewal", "supported_by_sae", "annual_vendor_review_reqd"}
-_TOOL_INT_FIELDS = {"cost_center", "seat_count", "effectiveness_score", "coverage_score", "score", "auto_renewal_notification_term"}
+_TOOL_INT_FIELDS = {"cost_center", "seat_count", "auto_renewal_notification_term"}
+_TOOL_SCORE_FIELDS = {"effectiveness_score", "coverage_score", "score"}
 _TOOL_FLOAT_FIELDS = {"contract_cost_usd", "annual_cost"}
 _TOOL_DATE_FIELDS = {"last_assessed_date", "next_review_date", "start_date", "end_date", "email_sent"}
 
@@ -160,6 +161,8 @@ def _parse_tool_row(row: dict) -> dict:
             continue
         if k in _TOOL_BOOL_FIELDS:
             data[k] = str(v).lower() in ("true", "yes", "1", "y")
+        elif k in _TOOL_SCORE_FIELDS:
+            data[k] = float(str(v))
         elif k in _TOOL_INT_FIELDS:
             data[k] = int(float(str(v)))
         elif k in _TOOL_FLOAT_FIELDS:

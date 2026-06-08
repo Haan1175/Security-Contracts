@@ -67,6 +67,11 @@ export async function fetchEnums(): Promise<EnumsResponse> {
   return data;
 }
 
+export async function fetchFYSpend(): Promise<{ quarter: string; FY25: number; FY26: number; FY27: number; FY28: number }[]> {
+  const { data } = await api.get("/reports/fy-spend");
+  return data;
+}
+
 export async function importContractsCsv(file: File): Promise<{ imported: number; errors: { row: number; error: string }[] }> {
   const form = new FormData();
   form.append("file", file);

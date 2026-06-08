@@ -39,9 +39,9 @@ class SecurityTool(Base):
     owner_email = Column(String)                # "Internal Contact email"
     cost_center = Column(Integer)
     # Scores (0–5)
-    score = Column(Integer)                     # "Score (0-5)"
-    effectiveness_score = Column(Integer)       # "Effectiveness (0-5)"
-    coverage_score = Column(Integer)            # "Coverage (0-5)"
+    score = Column(Float)                       # "Score (0-5)"
+    effectiveness_score = Column(Float)         # "Effectiveness (0-5)"
+    coverage_score = Column(Float)              # "Coverage (0-5)"
     # Assessment
     supported_by_sae = Column(Boolean, default=False)
     annual_vendor_review_reqd = Column(Boolean, default=False)

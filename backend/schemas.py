@@ -111,9 +111,9 @@ class ToolBase(BaseModel):
     owner_email: Optional[str] = None
     cost_center: Optional[int] = None
     # Scores (0–5)
-    score: Optional[int] = None
-    effectiveness_score: Optional[int] = None
-    coverage_score: Optional[int] = None
+    score: Optional[float] = None
+    effectiveness_score: Optional[float] = None
+    coverage_score: Optional[float] = None
     # Assessment
     supported_by_sae: Optional[bool] = False
     annual_vendor_review_reqd: Optional[bool] = False
